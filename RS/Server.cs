@@ -52,12 +52,12 @@ namespace AppTcpServer
                 username = stringBuilder.ToString();
                 logger.LogInformation("Подключился пользователь: " + username);
 
-                /*if (!CheckUserOrRequestNewUsername(ref username))
+                if (!CheckUserOrRequestNewUsername(ref username))
                 {
                     SendMessageToClient(stream, "INVALID_USERNAME");
 
                     return;
-                }*/
+                }
 
                 SendChatHistoryToClient(stream);
 
@@ -99,6 +99,12 @@ namespace AppTcpServer
 
                 logger.LogInformation("Обработка пользователя закончена.");
             }
+        }
+
+        private void SendMessageToClient(NetworkStream stream, string message)
+        {
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            stream.Write(data, 0, data.Length);
         }
 
         private void BroadcastMessage(string message)
@@ -164,6 +170,41 @@ namespace AppTcpServer
             catch (Exception ex)
             {
                 logger.LogError("Ошибка при сохранении сообщения: " +  ex.Message);
+            }
+        }
+
+        private bool CheckUserOrRequestNewUsername(ref string username)
+        {
+            try
+            {
+                using (NpgsqlConnection connection = new NpgsqlConnection(connString))
+                {
+                    connection.Open();
+                    using (var cmd = new NpgsqlCommand("SELECT * FROM users WHERE username = @username", connection))
+                    {
+                        cmd.Parameters.AddWithValue("username", username);
+                        object result = cmd.ExecuteScalar();
+
+                        if (result != null)
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            using (var insertCmd = new NpgsqlCommand("INSERT INTO users (username) VALUES (@username)", connection))
+                            {
+                                insertCmd.Parameters.AddWithValue("username", username);
+                                insertCmd.ExecuteNonQuery();
+                            }
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return false;
             }
         }
     }
